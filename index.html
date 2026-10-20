@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TodoStickers</title>
+<link rel="icon" type="image/png" href="icon.png">
+<style>
+  :root {
+    --bg: #2b2d31;
+    --bar: #1f2023;
+    --text-ui: #e8e8e8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text-ui);
+    font-family: "Segoe UI", system-ui, sans-serif; overflow: hidden; }
+
+  .bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 8px 12px; background: var(--bar); font-size: 13px;
+    -webkit-app-region: drag; user-select: none; }
+  .bar button, .bar select, .bar input, .bar .panel { -webkit-app-region: no-drag; }
+  .bar .title { font-weight: 600; font-size: 15px; margin-right: 8px; display: flex; align-items: center; gap: 6px; }
+  .bar .title img { width: 20px; height: 20px; }
+  .bar label { display: flex; align-items: center; gap: 6px; }
+  .bar select, .bar input[type=number], .bar button {
+    background: #34363b; color: var(--text-ui); border: 1px solid #45474d;
+    border-radius: 6px; padding: 4px 8px; font: inherit; }
+  .bar button { cursor: pointer; min-width: 30px; }
+  .bar button:hover { background: #3f4147; }
+  .bar button.on { background: #555a63; border-color: #7a808a; }
+  .bar .primary { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+  .bar .primary:hover { background: #2563eb; }
+  .bar .spacer { flex: 1; }
+
+  /* "Saved" shows briefly after each automatic save */
+  .saved { font-size: 12px; color: #8a8d94; opacity: 0; transition: opacity .6s; }
+  .saved.show { opacity: 1; transition: opacity .15s; }
+  .saved.error { opacity: 1; color: #f87171; }
+
+  .winctl { display: flex; margin: -8px -12px -8px 4px; align-self: stretch; }
+  .winctl[hidden] { display: none; }
+  .bar .winctl button { width: 46px; border: 0; border-radius: 0; background: transparent;
+    font: 10px "Segoe Fluent Icons", "Segoe MDL2 Assets"; color: var(--text-ui); }
+  .bar .winctl button:hover { background: #3a3c41; }
+  .bar .winctl button.close:hover { background: #c42b1c; color: #fff; }
+
+  /* Settings panel */
+  .settings-wrap { position: relative; }
+  .panel { position: absolute; top: calc(100% + 8px); right: 0; z-index: 1000; width: 270px;
+    display: none; flex-direction: column; gap: 10px; padding: 14px;
+    background: #26282c; border: 1px solid #45474d; border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.5); user-select: text; }
+  .panel.open { display: flex; }
+  .panel h4 { margin: 4px 0 0; font-size: 12px; font-weight: 600; color: #9a9da4;
+    text-transform: uppercase; letter-spacing: .04em; }
+  .panel .row { display: flex; gap: 8px; align-items: center; }
+  .panel .row > * { flex: 1; }
+  .panel label { justify-content: space-between; }
+  .panel input[type=number] { width: 72px; flex: 0 0 auto; }
+  .panel .hint { font-size: 11px; color: #8a8d94; line-height: 1.4; }
+
+  .board { position: relative; height: calc(100% - var(--bar-h, 46px));
+    overflow: auto; scrollbar-gutter: stable; }
+  .board::-webkit-scrollbar { width: 12px; height: 12px; }
+  .board::-webkit-scrollbar-thumb { background: #4a4d54; border-radius: 6px; border: 3px solid var(--bg); }
+  .board .spacer-end { position: absolute; width: 1px; height: 1px; pointer-events: none; }
+
+  .note { position: absolute; display: flex; flex-direction: column; min-height: 0;
+    border-radius: 4px 4px 4px 18px; box-shadow: 0 4px 10px rgba(0,0,0,.35);
+    color: #222; overflow: hidden; }
+  .note .head { display: flex; align-items: center; gap: 4px; padding: 4px 6px;
+    background: rgba(0,0,0,.07); cursor: grab; touch-action: none; }
+  .note .head .grip { color: rgba(0,0,0,.35); font-size: 12px; letter-spacing: -2px; padding: 0 2px; }
+  .note .head input.name { flex: 1; min-width: 0; border: 0; background: transparent;
+    font: 600 13px "Segoe UI", sans-serif; color: #333; outline: none; }
+  .note .head button { border: 0; background: transparent; cursor: pointer;
+    font-size: 14px; line-height: 1; padding: 2px 4px; border-radius: 4px; color: #444;
+    opacity: .55; }
+  .note .head button:hover { opacity: 1; background: rgba(0,0,0,.1); }
+  .note.dragging { box-shadow: 0 14px 30px rgba(0,0,0,.55); opacity: .95; }
+  .note.dragging .head { cursor: grabbing; }
+  .note .body { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 10px;
+    outline: none; color: #222; line-height: 1.35; word-wrap: break-word;
+    font-family: "Segoe UI", sans-serif; }
+  .note .body:empty::before { content: "Type here..."; color: rgba(0,0,0,.35); }
+  .note .body ul { margin: 2px 0; padding-left: 1.4em; }
+  .colors { position: absolute; top: 28px; right: 6px; display: none; gap: 4px;
+    padding: 6px; background: #fff; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,.3); z-index: 4; }
+  .colors.open { display: flex; }
+  .colors span { width: 18px; height: 18px; border-radius: 50%; cursor: pointer;
+    border: 1px solid rgba(0,0,0,.2); }
+  .size-ctrl { display: flex; gap: 2px; }
+
+  /* Resize handles */
+  .rz { position: absolute; z-index: 3; }
+  .rz-r { top: 28px; right: 0; width: 6px; bottom: 0; cursor: ew-resize; }
+  .rz-b { left: 0; bottom: 0; width: 100%; height: 8px; cursor: ns-resize; }
+  .rz-c { right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize;
+    background: linear-gradient(135deg, transparent 55%, rgba(0,0,0,.25) 55%, rgba(0,0,0,.25) 65%,
+      transparent 65%, transparent 75%, rgba(0,0,0,.25) 75%, rgba(0,0,0,.25) 85%, transparent 85%); }
+  body.busy, body.busy * { user-select: none !important; }
+  .note.resizing { outline: 2px dashed rgba(255,255,255,.6); outline-offset: 2px; }
+</style>
+</head>
+<body>
+  <div class="bar" id="bar">
+    <span class="title"><img src="icon.png" alt="">TodoStickers</span>
+    <select id="font" title="Font of the selected text">
+      <option value="">Font</option>
+      <option>Segoe UI</option>
+      <option>Arial</option>
+      <option>Calibri</option>
+      <option>Verdana</option>
+      <option>Tahoma</option>
+      <option>Times New Roman</option>
+      <option>Georgia</option>
+      <option>Consolas</option>
+      <option>Comic Sans MS</option>
+      <option>Segoe Print</option>
+      <option>Ink Free</option>
+    </select>
+    <select id="size" title="Size of the selected text">
+      <option value="">Size</option>
+      <option>10</option><option>12</option><option>14</option><option>16</option>
+      <option>18</option><option>20</option><option>24</option><option>28</option>
+      <option>32</option><option>40</option><option>48</option>
+    </select>
+    <button id="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+    <button id="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+    <button id="underline" title="Underline (Ctrl+U)"><u>U</u></button>
+    <button id="bullets" title="Bullet list (Ctrl+Shift+8)">• List</button>
+    <span class="spacer"></span>
+    <span class="saved" id="saved">✓ Saved</span>
+    <button class="primary" id="add" title="Add a new note">+ Add note</button>
+    <div class="settings-wrap">
+      <button id="settingsBtn" title="Settings">⚙️ Settings</button>
+      <div class="panel" id="panel">
+        <h4>Sticker size</h4>
+        <label>Notes per row <input type="number" id="cols" min="1" max="12" step="1"></label>
+        <label>Rows per screen <input type="number" id="rows" min="1" max="12" step="1"></label>
+        <div class="hint">Sticker size follows the window: this many notes fit across and down the screen.</div>
+        <div class="row">
+          <button id="resetSize" title="Back to 3 × 4 and default sizes">Default</button>
+          <button id="arrange" title="Line up all notes neatly">Arrange notes</button>
+        </div>
+        <div class="hint">Drag a note by its top strip to move it. Drag its edge or bottom-right corner to resize; double-click the corner to reset that note's size.</div>
+      </div>
+    </div>
+    <div class="winctl" id="winctl" hidden>
+      <button id="wMin" title="Minimize">&#xE921;</button>
+      <button id="wMax" title="Maximize">&#xE922;</button>
+      <button id="wClose" class="close" title="Close">&#xE8BB;</button>
+    </div>
+  </div>
+  <div class="board" id="board"></div>
+
+<script>
+const KEY = "todostickers-v2";
+const COLORS = ["#fff59d", "#ffcc80", "#f8bbd0", "#c5e1a5", "#b3e5fc", "#d1c4e9", "#ffffff"];
+const GAP = 12;
+const MIN_W = 120, MIN_H = 80;
+const DEF_COLS = 3, DEF_ROWS = 4;
+
+/* ---------- Storage ---------- */
+// In the desktop app notes go to a file; opened in a browser it falls back to localStorage
+const desktop = window.todostickers;
+const store = desktop
+  ? { load: () => desktop.load(), save: (t) => { if (!desktop.save(t)) throw new Error("save"); } }
+  : { load: () => localStorage.getItem(KEY), save: (t) => localStorage.setItem(KEY, t) };
+
+function newNote(i) {
+  return { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+           name: "Note " + (i + 1), html: "", color: COLORS[i % 6], size: 15 };
+}
+function defaults() {
+  return { v: 2, cols: DEF_COLS, rows: DEF_ROWS, notes: Array.from({ length: 12 }, (_, i) => newNote(i)) };
+}
+function escapeHtml(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+// Older versions stored pixel positions; convert so notes get re-laid out to fit the window
+function migrate(s) {
+  if (s.v !== 2) {
+    s.notes.forEach(n => {
+      if (n.html === undefined) n.html = escapeHtml(n.text || "").replace(/\n/g, "<br>");
+      if (!n.size) n.size = s.size || 15;
+      delete n.text; delete n.x; delete n.y; delete n.w; delete n.h;
+    });
+    s = { v: 2, cols: s.cols || DEF_COLS, rows: DEF_ROWS, notes: s.notes };
+  }
+  return s;
+}
+// Notes with untouched default names get renumbered from 1 on every start
+function renumber() {
+  state.notes.forEach((n, i) => {
+    if (/^(Note|Not) \d+$/.test(n.name.trim())) n.name = "Note " + (i + 1);
+  });
+}
+
+let state;
+try { state = JSON.parse(store.load()); } catch {}
+state = state && Array.isArray(state.notes) ? migrate(state) : defaults();
+renumber();
+
+const savedEl = document.getElementById("saved");
+let savedTimer;
+function persist() {
+  try {
+    store.save(JSON.stringify(state));
+    return true;
+  } catch {
+    savedEl.textContent = "⚠ Could not save";
+    savedEl.className = "saved error";
+    return false;
+  }
+}
+// Every change saves immediately and flashes "Saved" for 3 seconds
+function save() {
+  if (!persist()) return;
+  savedEl.textContent = "✓ Saved";
+  savedEl.className = "saved show";
+  clearTimeout(savedTimer);
+  savedTimer = setTimeout(() => savedEl.classList.remove("show"), 3000);
+}
+
+/* ---------- Proportional layout ---------- */
+// Positions and custom sizes are stored as fractions of the board, so everything
+// scales when the window is resized
+const board = document.getElementById("board");
+const vw = () => board.clientWidth;
+const vh = () => board.clientHeight;
+const cellW = () => Math.max(MIN_W, (vw() - (state.cols + 1) * GAP) / state.cols);
+const cellH = () => Math.max(MIN_H, (vh() - (state.rows + 1) * GAP) / state.rows);
+const wPx = n => n.w != null ? Math.max(MIN_W, n.w * vw()) : cellW();
+const hPx = n => n.h != null ? Math.max(MIN_H, n.h * vh()) : cellH();
+
+function rectPx(n) { return { x: n.x * vw(), y: n.y * vh(), w: wPx(n), h: hPx(n) }; }
+
+function slotPx(i) {
+  const c = i % state.cols, r = Math.floor(i / state.cols);
+  return { x: GAP + c * (cellW() + GAP), y: GAP + r * (cellH() + GAP) };
+}
+
+function overlaps(a, list) {
+  return list.some(n => {
+    const b = rectPx(n);
+    return a.x < b.x + b.w - 1 && a.x + a.w > b.x + 1 && a.y < b.y + b.h - 1 && a.y + a.h > b.y + 1;
+  });
+}
+
+// First empty slot (row by row) for a new note
+function freeSpot(others) {
+  for (let i = 0; i < 2000; i++) {
+    const p = slotPx(i);
+    if (!overlaps({ ...p, w: cellW(), h: cellH() }, others)) return { x: p.x / vw(), y: p.y / vh() };
+  }
+  const p = slotPx(others.length);
+  return { x: p.x / vw(), y: p.y / vh() };
+}
+
+function arrange() {
+  // Rows and columns widen to fit any note that was resized by hand
+  const cols = state.cols, colW = [], rowH = [];
+  state.notes.forEach((n, i) => {
+    const c = i % cols, r = Math.floor(i / cols);
+    colW[c] = Math.max(colW[c] || 0, wPx(n));
+    rowH[r] = Math.max(rowH[r] || 0, hPx(n));
+  });
+  state.notes.forEach((n, i) => {
+    const c = i % cols, r = Math.floor(i / cols);
+    n.x = (GAP + colW.slice(0, c).reduce((a, b) => a + b + GAP, 0)) / vw();
+    n.y = (GAP + rowH.slice(0, r).reduce((a, b) => a + b + GAP, 0)) / vh();
+  });
+}
+
+function placeNote(el) {
+  const r = rectPx(el._note);
+  el.style.left = r.x + "px";
+  el.style.top = r.y + "px";
+  el.style.width = r.w + "px";
+  el.style.height = r.h + "px";
+}
+
+function updateSpacer() {
+  let maxX = 0, maxY = 0;
+  state.notes.forEach(n => {
+    const r = rectPx(n);
+    maxX = Math.max(maxX, r.x + r.w);
+    maxY = Math.max(maxY, r.y + r.h);
+  });
+  let sp = board.querySelector(".spacer-end");
+  if (!sp) { sp = document.createElement("div"); sp.className = "spacer-end"; board.appendChild(sp); }
+  sp.style.left = (maxX + GAP - 1) + "px";
+  sp.style.top = (maxY + GAP - 1) + "px";
+}
+
+function relayout() {
+  document.documentElement.style.setProperty("--bar-h",
+    document.getElementById("bar").offsetHeight + "px");
+  board.querySelectorAll(".note").forEach(placeNote);
+  updateSpacer();
+}
+
+let topZ = 1;
+function render() {
+  board.innerHTML = "";
+  state.notes.forEach((n) => board.appendChild(noteEl(n)));
+  relayout();
+}
+
+function noteEl(n) {
+  const el = document.createElement("div");
+  el.className = "note";
+  el.style.background = n.color;
+  el.innerHTML = `
+    <div class="head" title="Drag to move">
+      <span class="grip">⋮⋮</span>
+      <input class="name" spellcheck="false">
+      <span class="size-ctrl">
+        <button data-act="smaller" title="Smaller text in this note">A−</button>
+        <button data-act="bigger" title="Bigger text in this note">A+</button>
+      </span>
+      <button data-act="color" title="Color">🎨</button>
+      <button data-act="del" title="Delete note">✕</button>
+    </div>
+    <div class="colors">${COLORS.map(c => `<span data-c="${c}" style="background:${c}"></span>`).join("")}</div>
+    <div class="body" contenteditable="true" spellcheck="false"></div>
+    <div class="rz rz-r" data-rz="r"></div>
+    <div class="rz rz-b" data-rz="b"></div>
+    <div class="rz rz-c" data-rz="c" title="Drag to resize · double-click: default size"></div>`;
+  el._note = n;
+  if (n.z) { el.style.zIndex = n.z; topZ = Math.max(topZ, n.z); }
+  el.querySelector(".head").addEventListener("pointerdown", (e) => startDrag(e, el));
+  el.addEventListener("pointerdown", () => bringToFront(el), true);
+  el.querySelectorAll(".rz").forEach(h => {
+    h.addEventListener("pointerdown", (e) => startResize(e, el, h.dataset.rz));
+    h.addEventListener("dblclick", () => { n.w = n.h = null; placeNote(el); updateSpacer(); save(); });
+  });
+
+  const name = el.querySelector(".name");
+  const body = el.querySelector(".body");
+  const colors = el.querySelector(".colors");
+  name.value = n.name;
+  body.innerHTML = n.html;
+  body.style.fontSize = n.size + "px";
+  body._note = n;
+
+  name.addEventListener("input", () => { n.name = name.value; save(); });
+  body.addEventListener("input", () => {
+    if (body.innerHTML === "<br>") body.innerHTML = "";
+    n.html = body.innerHTML; save();
+  });
+
+  el.querySelector(".head").addEventListener("click", (e) => {
+    const act = e.target.dataset.act;
+    if (!act) return;
+    if (act === "del") {
+      if (body.textContent.trim() && !confirm(`Delete "${n.name}"?`)) return;
+      state.notes = state.notes.filter(x => x !== n);
+      save(); render();
+    } else if (act === "color") {
+      colors.classList.toggle("open");
+    } else if (act === "smaller" || act === "bigger") {
+      n.size = Math.min(48, Math.max(8, n.size + (act === "bigger" ? 1 : -1)));
+      body.style.fontSize = n.size + "px";
+      save();
+    }
+  });
+  colors.addEventListener("click", (e) => {
+    const c = e.target.dataset.c;
+    if (!c) return;
+    n.color = c; el.style.background = c;
+    colors.classList.remove("open"); save();
+  });
+  return el;
+}
+
+/* ---------- Moving ---------- */
+function bringToFront(el) {
+  const n = el._note;
+  if (n.z === topZ) return;
+  n.z = ++topZ;
+  el.style.zIndex = n.z;
+  persist();
+}
+
+function startDrag(e, el) {
+  if (e.button !== 0 || e.target.closest("button")) return;
+  const n = el._note;
+  const onInput = e.target.matches("input");
+  const sx = e.clientX, sy = e.clientY;
+  const sl = board.scrollLeft, st = board.scrollTop;
+  const ox = n.x * vw(), oy = n.y * vh();
+  let dragging = false;
+  if (!onInput) e.preventDefault();
+
+  const move = (ev) => {
+    const dx = ev.clientX - sx + board.scrollLeft - sl;
+    const dy = ev.clientY - sy + board.scrollTop - st;
+    // Clicking the title shouldn't start a drag; require a little movement first
+    if (!dragging) {
+      if (Math.abs(dx) + Math.abs(dy) < 5) return;
+      dragging = true;
+      if (onInput) e.target.blur();
+      el.classList.add("dragging");
+      document.body.classList.add("busy");
+    }
+    const x = Math.max(0, ox + dx), y = Math.max(0, oy + dy);
+    n.x = x / vw(); n.y = y / vh();
+    el.style.left = x + "px";
+    el.style.top = y + "px";
+    autoScroll(ev);
+  };
+  const up = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    window.removeEventListener("pointercancel", up);
+    if (dragging) {
+      el.classList.remove("dragging");
+      document.body.classList.remove("busy");
+      updateSpacer(); save();
+    }
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+  window.addEventListener("pointercancel", up);
+}
+
+// Scroll the board when a note is dragged near its edge
+function autoScroll(ev) {
+  const r = board.getBoundingClientRect(), edge = 40, step = 15;
+  if (ev.clientY > r.bottom - edge) board.scrollTop += step;
+  else if (ev.clientY < r.top + edge) board.scrollTop -= step;
+  if (ev.clientX > r.right - edge) board.scrollLeft += step;
+  else if (ev.clientX < r.left + edge) board.scrollLeft -= step;
+  updateSpacer();
+}
+
+/* ---------- Resizing ---------- */
+function startResize(e, el, dir) {
+  e.preventDefault();
+  const n = el._note;
+  const handle = e.currentTarget;
+  handle.setPointerCapture(e.pointerId);
+  const sx = e.clientX, sy = e.clientY;
+  const sw = el.offsetWidth, sh = el.offsetHeight;
+  document.body.classList.add("busy");
+  el.classList.add("resizing");
+  const move = (ev) => {
+    if (dir !== "b") el.style.width = Math.max(MIN_W, sw + ev.clientX - sx) + "px";
+    if (dir !== "r") el.style.height = Math.max(MIN_H, sh + ev.clientY - sy) + "px";
+  };
+  const up = () => {
+    handle.removeEventListener("pointermove", move);
+    handle.removeEventListener("pointerup", up);
+    handle.removeEventListener("pointercancel", up);
+    document.body.classList.remove("busy");
+    el.classList.remove("resizing");
+    if (dir !== "b") n.w = el.offsetWidth / vw();
+    if (dir !== "r") n.h = el.offsetHeight / vh();
+    updateSpacer(); save();
+  };
+  handle.addEventListener("pointermove", move);
+  handle.addEventListener("pointerup", up);
+  handle.addEventListener("pointercancel", up);
+}
+
+/* ---------- Formatting the selected text ---------- */
+let savedRange = null;
+
+function activeBody(node) {
+  node = node && (node.nodeType === 1 ? node : node.parentElement);
+  return node ? node.closest(".note .body") : null;
+}
+
+document.addEventListener("selectionchange", () => {
+  const sel = getSelection();
+  if (!sel.rangeCount || !activeBody(sel.anchorNode)) return;
+  savedRange = sel.getRangeAt(0).cloneRange();
+  updateToolbar();
+});
+
+function restoreSelection() {
+  if (!savedRange) return null;
+  const body = activeBody(savedRange.commonAncestorContainer);
+  if (!body || !body.isConnected) return null;
+  body.focus();
+  const sel = getSelection();
+  sel.removeAllRanges();
+  sel.addRange(savedRange);
+  return body;
+}
+
+function afterEdit(body) {
+  body._note.html = body.innerHTML;
+  save();
+  updateToolbar();
+}
+
+function exec(cmd, val) {
+  const body = restoreSelection();
+  if (!body) return;
+  document.execCommand("styleWithCSS", false, true);
+  document.execCommand(cmd, false, val);
+  afterEdit(body);
+}
+
+// Apply a font family / size to the selected text only
+function applyStyle(prop, value) {
+  const body = restoreSelection();
+  if (!body) return;
+  const sel = getSelection();
+  const range = sel.getRangeAt(0);
+
+  if (range.collapsed) {
+    // Nothing selected: open a styled span at the caret so what's typed next uses it
+    const span = document.createElement("span");
+    span.style[prop] = value;
+    span.textContent = "​";
+    range.insertNode(span);
+    const r = document.createRange();
+    r.setStart(span.firstChild, 1);
+    r.collapse(true);
+    sel.removeAllRanges(); sel.addRange(r);
+    savedRange = r.cloneRange();
+    afterEdit(body);
+    return;
+  }
+
+  // Mark the selection temporarily, then turn the marked pieces into styled spans
+  document.execCommand("styleWithCSS", false, false);
+  document.execCommand("fontName", false, "__sel__");
+  const marked = body.querySelectorAll('font[face="__sel__"]');
+  let first = null, last = null;
+  marked.forEach(f => {
+    const span = document.createElement("span");
+    span.style[prop] = value;
+    // Clear the same property on nested pieces so the new value wins
+    f.querySelectorAll("*").forEach(c => { c.style && (c.style[prop] = ""); });
+    while (f.firstChild) span.appendChild(f.firstChild);
+    f.replaceWith(span);
+    first = first || span; last = span;
+  });
+  if (first) {
+    const r = document.createRange();
+    r.setStartBefore(first); r.setEndAfter(last);
+    sel.removeAllRanges(); sel.addRange(r);
+    savedRange = r.cloneRange();
+  }
+  afterEdit(body);
+}
+
+function updateToolbar() {
+  const sel = getSelection();
+  if (!sel.rangeCount || !activeBody(sel.anchorNode)) return;
+  ["bold", "italic", "underline"].forEach(c =>
+    document.getElementById(c).classList.toggle("on", document.queryCommandState(c)));
+  document.getElementById("bullets").classList.toggle("on", document.queryCommandState("insertUnorderedList"));
+}
+
+// Keep the note's text selection when toolbar buttons are clicked
+document.querySelectorAll("#bold,#italic,#underline,#bullets")
+  .forEach(b => b.addEventListener("mousedown", e => e.preventDefault()));
+document.getElementById("bold").addEventListener("click", () => exec("bold"));
+document.getElementById("italic").addEventListener("click", () => exec("italic"));
+document.getElementById("underline").addEventListener("click", () => exec("underline"));
+document.getElementById("bullets").addEventListener("click", () => exec("insertUnorderedList"));
+
+const fontSel = document.getElementById("font");
+const sizeSel = document.getElementById("size");
+fontSel.addEventListener("change", () => {
+  if (fontSel.value) applyStyle("fontFamily", `"${fontSel.value}"`);
+  fontSel.value = "";
+});
+sizeSel.addEventListener("change", () => {
+  if (sizeSel.value) applyStyle("fontSize", sizeSel.value + "px");
+  sizeSel.value = "";
+});
+
+// Ctrl+Shift+8 toggles a bullet list
+document.addEventListener("keydown", (e) => {
+  if (e.ctrlKey && e.shiftKey && (e.key === "*" || e.code === "Digit8") && activeBody(e.target)) {
+    e.preventDefault();
+    document.execCommand("insertUnorderedList");
+    afterEdit(activeBody(e.target));
+  }
+});
+
+// Paste as plain text so outside colors/backgrounds don't come along
+board.addEventListener("paste", (e) => {
+  if (!activeBody(e.target)) return;
+  e.preventDefault();
+  document.execCommand("insertText", false, e.clipboardData.getData("text/plain"));
+});
+
+/* ---------- Settings ---------- */
+const panel = document.getElementById("panel");
+const colsIn = document.getElementById("cols");
+const rowsIn = document.getElementById("rows");
+document.getElementById("settingsBtn").addEventListener("click", () => panel.classList.toggle("open"));
+document.addEventListener("mousedown", (e) => {
+  if (!e.target.closest(".settings-wrap")) panel.classList.remove("open");
+});
+
+function syncSettings() { colsIn.value = state.cols; rowsIn.value = state.rows; }
+syncSettings();
+
+function setGrid(cols, rows) {
+  state.cols = cols; state.rows = rows;
+  arrange(); relayout(); save();
+}
+colsIn.addEventListener("input", () => {
+  const v = parseInt(colsIn.value, 10);
+  if (v >= 1 && v <= 12) setGrid(v, state.rows);
+});
+rowsIn.addEventListener("input", () => {
+  const v = parseInt(rowsIn.value, 10);
+  if (v >= 1 && v <= 12) setGrid(state.cols, v);
+});
+document.getElementById("resetSize").addEventListener("click", () => {
+  state.notes.forEach(n => { n.w = n.h = null; });
+  setGrid(DEF_COLS, DEF_ROWS);
+  syncSettings();
+});
+document.getElementById("arrange").addEventListener("click", () => {
+  arrange(); relayout(); save();
+  board.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+});
+
+document.getElementById("add").addEventListener("click", () => {
+  // Next number after the highest "Note N" so names don't repeat
+  const maxNum = Math.max(0, ...state.notes.map(x => +(/^Note (\d+)$/.exec(x.name.trim()) || [])[1] || 0));
+  const n = Object.assign(newNote(Math.max(maxNum, state.notes.length)), freeSpot(state.notes));
+  n.z = ++topZ;
+  state.notes.push(n);
+  save(); render();
+  panel.classList.remove("open");
+  const last = board.querySelectorAll(".note");
+  const el = last[last.length - 1];
+  el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  el.querySelector(".body").focus({ preventScroll: true });
+});
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".colors") && e.target.dataset.act !== "color")
+    document.querySelectorAll(".colors.open").forEach(c => c.classList.remove("open"));
+});
+
+/* ---------- Window ---------- */
+if (desktop) {
+  document.getElementById("winctl").hidden = false;
+  const wMax = document.getElementById("wMax");
+  document.getElementById("wMin").addEventListener("click", desktop.minimize);
+  wMax.addEventListener("click", desktop.toggleMaximize);
+  document.getElementById("wClose").addEventListener("click", desktop.close);
+  desktop.onMaximized((m) => {
+    wMax.innerHTML = m ? "&#xE923;" : "&#xE922;";
+    wMax.title = m ? "Restore" : "Maximize";
+  });
+}
+
+window.addEventListener("resize", relayout);
+new ResizeObserver(relayout).observe(board);
+window.addEventListener("beforeunload", persist);
+window.addEventListener("pagehide", persist);
+document.addEventListener("visibilitychange", persist);
+
+// Notes without a position (first start / older version) get lined up
+function ensurePositions() {
+  if (state.notes.some(n => n.x == null || n.y == null)) arrange();
+}
+
+relayout();
+ensurePositions();
+render();
+persist();
+</script>
+</body>
+</html>
