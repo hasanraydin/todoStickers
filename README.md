@@ -4,15 +4,28 @@ Sticky notes for your Windows desktop. See all your notes at once on one board.
 
 ![TodoStickers](icon.png)
 
-## Download
+## How to install (step by step)
 
-Get **`TodoStickers-Setup-x.y.z.exe`** from the [Releases](../../releases) page and run it.
-It installs in a few seconds, adds a **TodoStickers** icon to your desktop and Start menu, and opens the app.
+1. Open the [**Releases**](../../releases/latest) page of this repository.
+2. Under **Assets**, click **`TodoStickers-Setup-x.y.z.exe`** to download it.
+3. Double-click the downloaded file.
+4. If Windows shows *"Windows protected your PC"*, click **More info → Run anyway**.
+   (This appears because the installer isn't code-signed; it's safe.)
+5. Wait a few seconds. TodoStickers installs itself and opens.
+6. From now on, start it from the **TodoStickers** icon on your desktop or in the Start menu.
 
-> The installer isn't code-signed, so Windows SmartScreen may say *"Windows protected your PC"*.
-> Click **More info → Run anyway**.
+## How to use
 
-To uninstall: **Settings → Apps → Installed apps → TodoStickers → Uninstall**.
+- **+ Add note** (top right) adds a new sticky note.
+- Click inside a note and start typing; everything saves automatically.
+- Select text, then use **Font**, **Size**, **B**, **I**, **U** or **• List** in the top bar.
+- Drag a note by its top strip to move it; drag its edge or corner to resize it.
+- **⚙️ Settings** sets how many notes fit across and down the screen.
+  **Default** resets layout and sizes, **Arrange notes** lines the notes back up.
+
+## Uninstall
+
+**Windows Settings → Apps → Installed apps → TodoStickers → Uninstall**.
 
 ## Features
 
