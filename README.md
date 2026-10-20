@@ -20,6 +20,7 @@ Sticky notes for your Windows desktop. See all your notes at once on one board.
 - Click inside a note and start typing; everything saves automatically.
 - Select text, then use **Font**, **Size**, **B**, **I**, **U** or **• List** in the top bar.
 - Drag a note by its top strip to move it; drag its edge or corner to resize it.
+- Click the **⛶** button on a note to open it large; click outside it (or press Esc) to shrink it back.
 - **⚙️ Settings** sets how many notes fit across and down the screen.
   **Default** resets layout and sizes, **Arrange notes** lines the notes back up.
 

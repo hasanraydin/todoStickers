@@ -99,6 +99,19 @@
     background: linear-gradient(135deg, transparent 55%, rgba(0,0,0,.25) 55%, rgba(0,0,0,.25) 65%,
       transparent 65%, transparent 75%, rgba(0,0,0,.25) 75%, rgba(0,0,0,.25) 85%, transparent 85%); }
   body.busy, body.busy * { user-select: none !important; }
+
+  /* Focus view: one note opens large on top, everything else dims behind it */
+  .note .head button.expand { font: 12px "Segoe Fluent Icons", "Segoe MDL2 Assets"; padding: 3px 5px; }
+  .backdrop { position: fixed; left: 0; right: 0; bottom: 0; top: var(--bar-h, 46px);
+    background: rgba(10, 11, 13, .6); backdrop-filter: blur(3px);
+    opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 1999; }
+  .backdrop.show { opacity: 1; pointer-events: auto; }
+  .note.focused { position: fixed; z-index: 2000 !important;
+    box-shadow: 0 24px 60px rgba(0,0,0,.6); border-radius: 6px 6px 6px 28px; }
+  .note.focus-anim { transition: left .22s ease, top .22s ease, width .22s ease, height .22s ease; }
+  .note.focused .rz { display: none; }
+  .note.focused .head { cursor: default; }
+  .note.focused .body { padding: 14px 18px; }
   .note.resizing { outline: 2px dashed rgba(255,255,255,.6); outline-offset: 2px; }
 </style>
 </head>
@@ -274,6 +287,7 @@ function arrange() {
 }
 
 function placeNote(el) {
+  if (el === focused) { Object.assign(el.style, focusRect()); return; }
   const r = rectPx(el._note);
   el.style.left = r.x + "px";
   el.style.top = r.y + "px";
@@ -303,6 +317,7 @@ function relayout() {
 
 let topZ = 1;
 function render() {
+  if (focused) closeFocus(true);
   board.innerHTML = "";
   state.notes.forEach((n) => board.appendChild(noteEl(n)));
   relayout();
@@ -320,6 +335,7 @@ function noteEl(n) {
         <button data-act="smaller" title="Smaller text in this note">A−</button>
         <button data-act="bigger" title="Bigger text in this note">A+</button>
       </span>
+      <button data-act="expand" class="expand" title="Open large">&#xE740;</button>
       <button data-act="color" title="Color">🎨</button>
       <button data-act="del" title="Delete note">✕</button>
     </div>
@@ -354,8 +370,11 @@ function noteEl(n) {
   el.querySelector(".head").addEventListener("click", (e) => {
     const act = e.target.dataset.act;
     if (!act) return;
-    if (act === "del") {
+    if (act === "expand") {
+      focused === el ? closeFocus() : openFocus(el);
+    } else if (act === "del") {
       if (body.textContent.trim() && !confirm(`Delete "${n.name}"?`)) return;
+      if (focused === el) closeFocus(true);
       state.notes = state.notes.filter(x => x !== n);
       save(); render();
     } else if (act === "color") {
@@ -375,6 +394,63 @@ function noteEl(n) {
   return el;
 }
 
+/* ---------- Focus view ---------- */
+let focused = null;
+const backdrop = document.createElement("div");
+backdrop.className = "backdrop";
+document.body.appendChild(backdrop);
+backdrop.addEventListener("mousedown", () => closeFocus());
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && focused) closeFocus(); });
+
+// Large size, centered over the board area (the top bar stays usable for formatting)
+function focusRect() {
+  const br = board.getBoundingClientRect();
+  const w = br.width * 0.84, h = br.height * 0.9;
+  return { left: br.left + (br.width - w) / 2 + "px", top: br.top + (br.height - h) / 2 + "px",
+           width: w + "px", height: h + "px" };
+}
+
+// Where the note normally sits, in window coordinates
+function homeRect(el) {
+  const br = board.getBoundingClientRect(), r = rectPx(el._note);
+  return { left: br.left + r.x - board.scrollLeft + "px", top: br.top + r.y - board.scrollTop + "px",
+           width: r.w + "px", height: r.h + "px" };
+}
+
+function setExpandIcon(el, open) {
+  const b = el.querySelector(".expand");
+  b.innerHTML = open ? "&#xE73F;" : "&#xE740;";
+  b.title = open ? "Back to normal size" : "Open large";
+}
+
+function openFocus(el) {
+  if (focused) closeFocus(true);
+  focused = el;
+  Object.assign(el.style, homeRect(el));
+  el.classList.add("focused");
+  el.offsetWidth;                       // start the animation from the note's current spot
+  el.classList.add("focus-anim");
+  Object.assign(el.style, focusRect());
+  backdrop.classList.add("show");
+  setExpandIcon(el, true);
+  el.querySelector(".body").focus({ preventScroll: true });
+}
+
+function closeFocus(instant) {
+  const el = focused;
+  if (!el) return;
+  focused = null;
+  backdrop.classList.remove("show");
+  setExpandIcon(el, false);
+  const finish = () => {
+    el.classList.remove("focused", "focus-anim");
+    placeNote(el);
+  };
+  if (instant) return finish();
+  Object.assign(el.style, homeRect(el));
+  setTimeout(finish, 230);
+}
+
 /* ---------- Moving ---------- */
 function bringToFront(el) {
   const n = el._note;
@@ -385,7 +461,7 @@ function bringToFront(el) {
 }
 
 function startDrag(e, el) {
-  if (e.button !== 0 || e.target.closest("button")) return;
+  if (e.button !== 0 || e.target.closest("button") || el === focused) return;
   const n = el._note;
   const onInput = e.target.matches("input");
   const sx = e.clientX, sy = e.clientY;
